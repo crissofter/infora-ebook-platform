@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   INFORA design tokens
+   80% neutros · 15% azul (ações) · 5% violeta (recursos de IA)
+------------------------------------------------------------------- */
+@theme {
+  --color-ink-950: #050609;
+  --color-ink-900: #0b0d12;
+  --color-ink-800: #11141b;
+  --color-ink-700: #171b24;
+  --color-ink-600: #1f2531;
+  --color-line: #232936;
+  --color-mist: #a5adbd;
+  --color-paper: #f7f8fa;
+  --color-brand-500: #4f7cff;
+  --color-brand-600: #3f66e0;
+  --color-brand-400: #7396ff;
+  --color-ai-500: #8b5cf6;
+  --color-ai-400: #a78bfa;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-ink-950);
+  color: var(--color-paper);
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+::selection {
+  background: rgba(79, 124, 255, 0.35);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #232936;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .surface {
+    background: linear-gradient(180deg, rgba(23, 27, 36, 0.9) 0%, rgba(11, 13, 18, 0.9) 100%);
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+  }
+  .hairline {
+    border-bottom: 1px solid var(--color-line);
+  }
+  .muted {
+    color: var(--color-mist);
+  }
+  .grid-bg {
+    background-image:
+      radial-gradient(60rem 30rem at 50% -10%, rgba(79, 124, 255, 0.16), transparent 70%),
+      linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 100% 100%, 64px 64px, 64px 64px;
+  }
+  .field {
+    width: 100%;
+    background: #0d1017;
+    border: 1px solid var(--color-line);
+    border-radius: 10px;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-paper);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .field::placeholder {
+    color: #5c6577;
+  }
+  .field:focus {
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.16);
+  }
+}
+
+@keyframes infora-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.pulse-dot {
+  animation: infora-pulse 1.6s ease-in-out infinite;
+}
+
+/* Print stylesheet used by the PDF export view */
+@media print {
+  .no-print { display: none !important; }
+  html, body { background: #ffffff !important; color: #101319 !important; }
+  .page-break { break-after: page; page-break-after: always; }
+}
