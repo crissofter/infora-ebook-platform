@@ -180,6 +180,26 @@ export const chapters = pgTable(
   (t) => [index("chapters_product_idx").on(t.productId, t.position)],
 );
 
+export const chapterBlocks = pgTable(
+  "chapter_blocks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
+    chapterId: uuid("chapter_id").notNull(),
+    position: integer("position").notNull().default(0),
+    type: text("type").notNull().default("TEXT"),
+    content: text("content"),
+    assetId: uuid("asset_id"),
+    metadata: jsonb("metadata"),
+    createdAt: now(),
+    updatedAt: upd(),
+  },
+  (t) => [
+    index("chapter_blocks_org_idx").on(t.organizationId),
+    index("chapter_blocks_chapter_idx").on(t.chapterId, t.position),
+  ],
+);
+
 export const salesPages = pgTable(
   "sales_pages",
   {
