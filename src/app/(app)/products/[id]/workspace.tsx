@@ -585,17 +585,20 @@ function DesignTab({
         </p>
       </div>
 
-      <div className="surface flex items-center justify-center p-5">
+            <div className="surface flex items-center justify-center p-5">
         {cover ? (
-          <div className="w-full max-w-[280px]" dangerouslySetInnerHTML={{ __html: cover }} />
+          <div
+            className="w-full max-w-[280px] overflow-hidden"
+            dangerouslySetInnerHTML={{ __html: cover }}
+          />
         ) : (
           <p className="text-xs text-[#6b7386]">Nenhuma capa gerada ainda.</p>
         )}
       </div>
-    </div>
+      
+</div>
   );
 }
-
 /* ----------------------------------------------------------------- SALES */
 
 function SalesTab({
