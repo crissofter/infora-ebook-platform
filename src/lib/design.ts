@@ -37,7 +37,7 @@ export function buildCoverSvg(opts: {
                 ? `<rect x="0" y="600" width="640" height="360" fill="${p.accent}" opacity="0.10"/><rect x="80" y="250" width="120" height="4" fill="${p.accent}"/>`
                 : `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${p.accent}" stop-opacity="0.35"/><stop offset="100%" stop-color="${p.accent}" stop-opacity="0"/></linearGradient></defs><rect x="0" y="0" width="640" height="960" fill="url(#g)"/><rect x="80" y="250" width="90" height="4" fill="${p.accent}"/>`;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 960" width="640" height="960" role="img" aria-label="${title}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 960" width="100%" height="auto" role="img" aria-label="${title}">
   <rect width="640" height="960" fill="${p.bg}"/>
   ${ornament}
   <text x="80" y="190" font-family="Helvetica, Arial, sans-serif" font-size="15" letter-spacing="6" fill="${p.accent}">${style}</text>
