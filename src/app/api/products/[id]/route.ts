@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { chapters, contentItems, products, salesPages } from "@/db/schema";
+import { assets, chapterBlocks, chapters, contentItems, products, salesPages } from "@/db/schema";
 import { apiOk, handler, parseBody } from "@/lib/api";
 import { requireSession } from "@/lib/auth";
 import { recordEvent } from "@/lib/analytics";
@@ -60,6 +60,10 @@ export const DELETE = handler(async (_request, ctx) => {
   const { organization, user } = await requireSession();
   const { id } = await ctx.params;
   await getOwnedProduct(id, organization.id);
+
+  const chs = await getProductChapters(id, organization.id);
+  for (const chapter of chs) await db.delete(chapterBlocks).where(and(eq(chapterBlocks.chapterId, chapter.id), eq(chapterBlocks.organizationId, organization.id)));
+  await db.delete(assets).where(and(eq(assets.productId, id), eq(assets.organizationId, organization.id)));
 
   await db.delete(chapters).where(and(eq(chapters.productId, id), eq(chapters.organizationId, organization.id)));
   await db.delete(salesPages).where(and(eq(salesPages.productId, id), eq(salesPages.organizationId, organization.id)));

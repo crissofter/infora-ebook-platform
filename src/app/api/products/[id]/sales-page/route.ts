@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/auth";
 import { recordEvent } from "@/lib/analytics";
 import { audit } from "@/lib/logger";
 import { getOwnedProduct, getSalesPage } from "@/lib/products";
+import { safeCheckoutUrl } from "@/lib/media";
 
 const schema = z.object({
   headline: z.string().min(3).max(240).optional(),
@@ -20,6 +21,7 @@ const schema = z.object({
   faq: z.array(z.object({ q: z.string().max(300), a: z.string().max(1200) })).max(20).optional(),
   guarantee: z.string().max(600).nullable().optional(),
   ctaLabel: z.string().max(60).optional(),
+  checkoutUrl: z.string().max(2000).refine((url) => url === "" || safeCheckoutUrl(url), "Use um link HTTPS público válido.").nullable().optional(),
   published: z.boolean().optional(),
 });
 
@@ -34,7 +36,7 @@ export const PATCH = handler(async (request, ctx) => {
 
   const updated = await db
     .update(salesPages)
-    .set({ ...body, updatedAt: new Date() })
+    .set({ ...body, checkoutUrl: body.checkoutUrl === "" ? null : body.checkoutUrl, updatedAt: new Date() })
     .where(eq(salesPages.id, existing.id))
     .returning();
 

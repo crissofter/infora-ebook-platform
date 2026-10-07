@@ -91,3 +91,11 @@ export const PATCH = handler(async (request, ctx) => {
 
   return apiOk(updated);
 });
+
+export const DELETE = handler(async (_request, ctx) => {
+  const { organization } = await requireSession();
+  const { id } = await ctx.params;
+  const [deleted] = await db.delete(chapterBlocks).where(and(eq(chapterBlocks.id, id), eq(chapterBlocks.organizationId, organization.id))).returning({ id: chapterBlocks.id });
+  if (!deleted) return apiError("Bloco não encontrado no seu workspace.", 404);
+  return apiOk({ deleted: true });
+});

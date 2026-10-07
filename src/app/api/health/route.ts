@@ -17,6 +17,7 @@ export async function GET() {
   }
   const ai = providerStatus();
   checks.aiProvider = ai.configured ? `configured:${ai.provider}` : "local-composer";
+  checks.imageProvider = process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY ? "configured:openai" : "not_configured";
   checks.paymentGateway = process.env.PAYMENT_PROVIDER ? "configured" : "not_configured";
   checks.socialIntegrations = process.env.META_APP_ID ? "configured" : "not_configured";
 

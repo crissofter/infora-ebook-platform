@@ -1,16 +1,19 @@
-import Link from "next/link";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, contentItems, products, socialAccounts } from "@/db/schema";
+import { MarketingEditor } from "@/components/marketing-editor";
 import { Badge, EmptyState, LinkButton, SectionTitle } from "@/components/ui";
 import { requireSession } from "@/lib/auth";
+import { metaConfig } from "@/lib/meta";
+import { MetaConnection } from "@/components/meta-connection";
 
 export const dynamic = "force-dynamic";
 
 const STATUS_FLOW = ["DRAFT", "AWAITING_APPROVAL", "SCHEDULED", "PUBLISHED", "FAILED"];
 
-export default async function MarketingPage() {
-  const { organization } = await requireSession();
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ meta?: string }> }) {
+  const { organization, membershipRole } = await requireSession();
+  const query = await searchParams;
 
   const [items, camps, accounts] = await Promise.all([
     db
@@ -20,14 +23,8 @@ export default async function MarketingPage() {
       .where(eq(contentItems.organizationId, organization.id))
       .orderBy(asc(contentItems.scheduledFor)),
     db.select().from(campaigns).where(eq(campaigns.organizationId, organization.id)),
-    db.select().from(socialAccounts).where(eq(socialAccounts.organizationId, organization.id)),
+    db.select({ provider: socialAccounts.provider, displayName: socialAccounts.displayName, status: socialAccounts.status }).from(socialAccounts).where(eq(socialAccounts.organizationId, organization.id)),
   ]);
-
-  const byDate = new Map<string, typeof items>();
-  for (const row of items) {
-    const key = row.item.scheduledFor ? row.item.scheduledFor.toISOString().slice(0, 10) : "sem-data";
-    byDate.set(key, [...(byDate.get(key) ?? []), row]);
-  }
 
   const counts = STATUS_FLOW.map((s) => ({ s, n: items.filter((i) => i.item.status === s).length }));
 
@@ -47,6 +44,8 @@ export default async function MarketingPage() {
           </div>
         ))}
       </div>
+
+      <MetaConnection configured={!!metaConfig()} canManage={["OWNER", "ADMIN"].includes(membershipRole)} accounts={accounts} campaigns={camps.map((c) => ({ id: c.id, name: c.name, metaCampaignId: c.metaCampaignId }))} result={query.meta} />
 
       <div className="surface p-5">
         <SectionTitle title="Integrações sociais" subtitle="Publicação exige conta oficial conectada e sua aprovação" />
@@ -82,32 +81,7 @@ export default async function MarketingPage() {
       ) : (
         <div className="space-y-5">
           <SectionTitle title="Calendário de conteúdo" subtitle="Agrupado por data prevista" />
-          {[...byDate.entries()].map(([date, rows]) => (
-            <div key={date}>
-              <p className="mb-2 text-[11px] uppercase tracking-wider text-[#6b7386]">
-                {date === "sem-data" ? "Sem data definida" : new Date(`${date}T12:00:00Z`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
-              </p>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {rows.map(({ item, productTitle }) => (
-                  <div key={item.id} className="surface p-4">
-                    <div className="flex items-center justify-between">
-                      <Badge tone={item.channel === "INSTAGRAM" ? "ai" : "brand"}>{item.channel}</Badge>
-                      <Badge tone={item.status === "PUBLISHED" ? "success" : item.status === "FAILED" ? "danger" : "neutral"}>
-                        {item.status}
-                      </Badge>
-                    </div>
-                    <p className="mt-2.5 text-xs font-medium text-white">{item.title}</p>
-                    <p className="mt-1.5 line-clamp-4 whitespace-pre-wrap text-[11px] leading-relaxed text-[#8a93a6]">{item.body}</p>
-                    {item.productId ? (
-                      <Link href={`/products/${item.productId}`} className="mt-3 inline-block text-[11px] text-[#7396ff] hover:text-white">
-                        {productTitle ?? "produto"} →
-                      </Link>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+          <MarketingEditor content={items.map(({ item }) => ({ ...item, scheduledFor: item.scheduledFor?.toISOString() ?? null }))} />
         </div>
       )}
     </div>

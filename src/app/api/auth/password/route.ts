@@ -1,11 +1,10 @@
-import { randomBytes } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { passwordResets, sessions, users } from "@/db/schema";
 import { apiError, apiOk, clientIp, handler, parseBody, rateLimit } from "@/lib/api";
 import { hashPassword, hashToken } from "@/lib/auth";
-import { audit, logSystem } from "@/lib/logger";
+import { audit } from "@/lib/logger";
 
 const requestSchema = z.object({ email: z.string().email() });
 const resetSchema = z.object({ token: z.string().min(10), password: z.string().min(8).max(200) });
@@ -15,28 +14,10 @@ export const POST = handler(async (request) => {
   const ip = clientIp(request);
   if (!rateLimit(`pwd:${ip}`, 6, 60_000).allowed) return apiError("Muitas tentativas. Aguarde um minuto.", 429);
 
-  const { email } = await parseBody(request, requestSchema);
-  const rows = await db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).limit(1);
-
-  // Resposta sempre neutra para não revelar existência de conta.
-  if (!rows[0]) return apiOk({ requested: true, delivery: "none" });
-
-  const token = randomBytes(24).toString("base64url");
-  await db.insert(passwordResets).values({
-    userId: rows[0].id,
-    tokenHash: hashToken(token),
-    expiresAt: new Date(Date.now() + 30 * 60_000),
-  });
-  await logSystem("info", "auth", "token de recuperação gerado", { userId: rows[0].id });
-
-  // Provedor de e-mail não configurado nesta instalação: o token é devolvido
-  // para uso manual em ambiente controlado e o fato é registrado em log.
-  const emailConfigured = Boolean(process.env.SMTP_URL);
-  return apiOk({
-    requested: true,
-    delivery: emailConfigured ? "email" : "not_configured",
-    token: emailConfigured ? undefined : token,
-  });
+  await parseBody(request, requestSchema);
+  // Never return account recovery credentials over a public endpoint. Merely
+  // setting SMTP_URL does not implement delivery; fail closed until it exists.
+  return apiError("Recuperação por e-mail indisponível nesta instalação. Entre em contato com o suporte.", 503, "EMAIL_DELIVERY_NOT_CONFIGURED");
 });
 
 /** Step 2 — apply the new password. */

@@ -1,5 +1,8 @@
 # INFORA
 
+Configuração dos novos recursos de imagens, checkout e conexão Meta:
+[Publicação e integrações](docs/PUBLICACAO-E-INTEGRACOES.md).
+
 **Da ideia ao produto. Do produto às vendas.**
 
 INFORA é uma plataforma SaaS modular para transformar ideias em produtos digitais, preparar sua

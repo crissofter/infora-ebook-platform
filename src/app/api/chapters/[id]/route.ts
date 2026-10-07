@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { chapters } from "@/db/schema";
+import { chapterBlocks, chapters } from "@/db/schema";
 import { apiError, apiOk, handler, parseBody } from "@/lib/api";
 import { requireSession } from "@/lib/auth";
 
@@ -31,6 +31,7 @@ export const PATCH = handler(async (request, ctx) => {
 export const DELETE = handler(async (_request, ctx) => {
   const { organization } = await requireSession();
   const { id } = await ctx.params;
+  await db.delete(chapterBlocks).where(and(eq(chapterBlocks.chapterId, id), eq(chapterBlocks.organizationId, organization.id)));
   const deleted = await db
     .delete(chapters)
     .where(and(eq(chapters.id, id), eq(chapters.organizationId, organization.id)))

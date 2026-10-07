@@ -5,6 +5,7 @@ import { products, salesPages } from "@/db/schema";
 import { Logo } from "@/components/brand";
 import { formatCurrency } from "@/lib/slug";
 import { SalesCta, SalesPageTracker } from "./tracker";
+import { getProductMedia } from "@/lib/product-media";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export default async function PublicSalesPage({ params }: { params: Promise<{ sl
   if (!row || !row.page.published || row.product.status !== "PUBLISHED") notFound();
 
   const { product, page } = row;
+  const { cover } = await getProductMedia(product.id, product.organizationId);
 
   return (
     <main className="min-h-screen bg-[#050609]">
@@ -30,8 +32,12 @@ export default async function PublicSalesPage({ params }: { params: Promise<{ sl
         <div className="mx-auto max-w-3xl px-5 py-24 text-center">
           <h1 className="text-3xl font-semibold leading-tight tracking-tight text-white sm:text-5xl">{page.headline}</h1>
           {page.subheadline ? <p className="mx-auto mt-5 max-w-2xl text-sm text-[#a5adbd] sm:text-base">{page.subheadline}</p> : null}
+          {cover ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cover.url} alt={`Capa de ${product.title}`} className="mx-auto mt-8 max-h-[420px] w-full max-w-[280px] rounded-xl object-contain shadow-2xl" />
+          ) : null}
           <div className="mt-9">
-            <SalesCta slug={slug} label={page.ctaLabel} price={product.priceCents} currency={product.currency} />
+            <SalesCta slug={slug} label={page.ctaLabel} price={product.priceCents} currency={product.currency} checkoutUrl={page.checkoutUrl} />
           </div>
         </div>
       </section>
@@ -128,7 +134,7 @@ export default async function PublicSalesPage({ params }: { params: Promise<{ sl
             <p className="mt-3 text-3xl font-semibold text-[#7396ff]">{formatCurrency(product.priceCents, product.currency)}</p>
           ) : null}
           <div className="mt-7">
-            <SalesCta slug={slug} label={page.ctaLabel} price={product.priceCents} currency={product.currency} />
+            <SalesCta slug={slug} label={page.ctaLabel} price={product.priceCents} currency={product.currency} checkoutUrl={page.checkoutUrl} />
           </div>
         </section>
       </div>

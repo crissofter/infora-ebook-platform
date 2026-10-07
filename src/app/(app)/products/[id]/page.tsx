@@ -1,11 +1,12 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { assets, contentItems } from "@/db/schema";
+import { contentItems } from "@/db/schema";
 import { requireSession } from "@/lib/auth";
 import { getOwnedProduct, getProductChapters, getSalesPage } from "@/lib/products";
 import { eventTotals, rangeStart } from "@/lib/analytics";
 import { providerStatus } from "@/lib/ai/provider";
 import { ProductWorkspace } from "./workspace";
+import { getProductMedia } from "@/lib/product-media";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const { organization } = await requireSession();
   const product = await getOwnedProduct(id, organization.id);
 
-  const [chs, salesPage, content, cover, totals] = await Promise.all([
+  const [chs, salesPage, content, totals, media] = await Promise.all([
     getProductChapters(id, organization.id),
     getSalesPage(id, organization.id),
     db
@@ -22,13 +23,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       .from(contentItems)
       .where(and(eq(contentItems.productId, id), eq(contentItems.organizationId, organization.id)))
       .orderBy(contentItems.scheduledFor),
-    db
-      .select()
-      .from(assets)
-      .where(and(eq(assets.productId, id), eq(assets.kind, "COVER"), eq(assets.organizationId, organization.id)))
-      .orderBy(desc(assets.createdAt))
-      .limit(1),
     eventTotals(organization.id, rangeStart("30d")),
+    getProductMedia(id, organization.id),
   ]);
 
   return (
@@ -62,6 +58,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               faq: salesPage.faq,
               guarantee: salesPage.guarantee,
               ctaLabel: salesPage.ctaLabel,
+              checkoutUrl: salesPage.checkoutUrl,
               published: salesPage.published,
             }
           : null
@@ -76,7 +73,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         status: c.status,
         scheduledFor: c.scheduledFor ? c.scheduledFor.toISOString() : null,
       }))}
-      coverSvg={cover[0]?.payload ?? null}
+      coverImage={media.cover}
+      chapterImages={media.images}
+      imageConfigured={Boolean(process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY)}
       metrics={{
         pageViews: totals.page_view ?? 0,
         ctaClicks: totals.cta_clicked ?? 0,

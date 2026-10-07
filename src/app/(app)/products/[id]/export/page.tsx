@@ -1,9 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
-import { db } from "@/db";
-import { assets } from "@/db/schema";
 import { requireSession } from "@/lib/auth";
 import { getOwnedProduct, getProductChapters } from "@/lib/products";
 import { PrintButton } from "./print-button";
+import { getProductMedia } from "@/lib/product-media";
 
 export const dynamic = "force-dynamic";
 
@@ -12,14 +10,7 @@ export default async function ExportPage({ params }: { params: Promise<{ id: str
   const { organization, user } = await requireSession();
   const product = await getOwnedProduct(id, organization.id);
   const chapters = await getProductChapters(id, organization.id);
-  const cover = (
-    await db
-      .select()
-      .from(assets)
-      .where(and(eq(assets.productId, id), eq(assets.kind, "COVER"), eq(assets.organizationId, organization.id)))
-      .orderBy(desc(assets.createdAt))
-      .limit(1)
-  )[0];
+  const { cover, images } = await getProductMedia(id, organization.id);
 
   return (
     <div className="mx-auto max-w-3xl bg-white text-[#101319]">
@@ -28,11 +19,12 @@ export default async function ExportPage({ params }: { params: Promise<{ id: str
         <PrintButton />
       </div>
 
-      <article className="px-10 py-12 leading-relaxed">
+      <article className="px-5 py-12 leading-relaxed sm:px-10">
         {/* Capa */}
         <section className="page-break flex min-h-[900px] flex-col justify-center">
-          {cover?.payload ? (
-            <div className="mx-auto w-[360px]" dangerouslySetInnerHTML={{ __html: cover.payload }} />
+          {cover ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cover.url} alt={`Capa de ${product.title}`} className="mx-auto w-full max-w-[360px]" />
           ) : (
             <div className="border-y-4 border-[#4F7CFF] py-12">
               <p className="text-xs uppercase tracking-[0.3em] text-[#4F7CFF]">{product.designStyle}</p>
@@ -78,6 +70,13 @@ export default async function ExportPage({ params }: { params: Promise<{ id: str
                 <p key={i}>{p}</p>
               ))}
             </div>
+            {images.filter((image) => image.chapterId === c.id).map((image) => (
+              <figure key={image.id} className="my-6 break-inside-avoid">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={image.url} alt={image.caption || image.name} className="mx-auto max-h-[600px] w-full rounded-lg object-contain" />
+                {image.caption ? <figcaption className="mt-2 text-center text-xs text-[#5C6577]">{image.caption}</figcaption> : null}
+              </figure>
+            ))}
           </section>
         ))}
 

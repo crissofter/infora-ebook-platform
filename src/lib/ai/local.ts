@@ -126,10 +126,10 @@ export function localSalesPage(ctx: {
     bonuses: ["Checklist de aplicação", "Roteiro de revisão semanal"],
     faq: [
       { q: "Para quem é este material?", a: `Para ${audience} que quer resolver ${problem} de forma estruturada.` },
-      { q: "Como recebo o material?", a: "O acesso é digital e fica disponível logo após a confirmação da compra." },
+      { q: "Como recebo o material?", a: "O material é digital. Confira as instruções de entrega no checkout do vendedor antes de concluir a compra." },
       { q: "Preciso de conhecimento prévio?", a: "Não. O material começa pelo diagnóstico e avança em etapas." },
     ],
-    guarantee: "Defina aqui a sua política de garantia antes de publicar.",
+    guarantee: "",
     ctaLabel: "Quero começar agora",
   };
 }
@@ -151,7 +151,7 @@ export function localMarketingPack(ctx: { title: string; audience?: string | nul
         format: "STORY",
         title: "Story — enquete de abertura",
         body: `Enquete: qual é o seu maior obstáculo hoje?\n(1) Falta de método\n(2) Falta de tempo\n\nAmanhã eu mostro como ${promise}.`,
-        cta: "Arraste para cima",
+        cta: "Acesse pelo link do story",
       },
       {
         channel: "INSTAGRAM",

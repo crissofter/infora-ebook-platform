@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ImageUpload, type ChapterImage } from "@/components/image-upload";
+import { ImageGenerate } from "@/components/image-generate";
+import type { ProductImage } from "@/lib/media";
+import { MarketingEditor } from "@/components/marketing-editor";
 import { Badge, Button, Field, Input, Modal, SectionTitle, Select, Stat, Tabs, Textarea, cx, useToast } from "@/components/ui";
 
 type Chapter = { id: string; title: string; summary: string | null; content: string; kind: string; position: number };
@@ -19,6 +23,7 @@ type SalesPage = {
   faq: { q: string; a: string }[];
   guarantee: string | null;
   ctaLabel: string;
+  checkoutUrl: string | null;
   published: boolean;
 };
 type ContentItem = {
@@ -50,6 +55,11 @@ type Product = {
   currency: string;
 };
 
+function salesPatch(page: SalesPage) {
+  const { headline, subheadline, problem, solution, benefits, contents, differentials, bonuses, faq, guarantee, ctaLabel, checkoutUrl } = page;
+  return { headline, subheadline, problem, solution, benefits, contents, differentials, bonuses, faq, guarantee, ctaLabel, checkoutUrl };
+}
+
 const STYLES = ["PREMIUM", "MINIMALISTA", "MODERNO", "ELEGANTE", "EDITORIAL", "CORPORATIVO", "CRIATIVO"];
 const PALETTES = ["MIDNIGHT", "VIOLET", "IVORY", "GRAPHITE", "EMERALD"];
 
@@ -58,7 +68,9 @@ export function ProductWorkspace({
   chapters: initialChapters,
   salesPage: initialSalesPage,
   content: initialContent,
-  coverSvg: initialCover,
+  coverImage: initialCover,
+  chapterImages: initialImages,
+  imageConfigured,
   metrics,
   aiConfigured,
 }: {
@@ -66,7 +78,9 @@ export function ProductWorkspace({
   chapters: Chapter[];
   salesPage: SalesPage | null;
   content: ContentItem[];
-  coverSvg: string | null;
+  coverImage: ProductImage | null;
+  chapterImages: ChapterImage[];
+  imageConfigured: boolean;
   metrics: { pageViews: number; ctaClicks: number; checkouts: number; purchases: number };
   aiConfigured: boolean;
 }) {
@@ -78,6 +92,7 @@ export function ProductWorkspace({
   const [salesPage, setSalesPage] = useState(initialSalesPage);
   const [content, setContent] = useState(initialContent);
   const [cover, setCover] = useState(initialCover);
+  const [images, setImages] = useState(initialImages);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -106,13 +121,13 @@ export function ProductWorkspace({
     try {
       const data = await call(`/api/products/${product.id}/generate`, "POST", { kind });
       if (kind === "cover") {
-        setCover(data.asset.payload);
+        setCover({ id: data.asset.id, name: data.asset.name, url: `/api/assets/${data.asset.id}` });
         push("Capa gerada.", "success");
       } else if (kind === "sales_page") {
         setSalesPage(data.salesPage);
         push("Página de vendas gerada.", "success");
       } else {
-        setContent(data.items);
+        setContent((previous) => [...previous, ...data.items]);
         push(`${data.items.length} conteúdos promocionais gerados.`, "success");
       }
       router.refresh();
@@ -124,12 +139,15 @@ export function ProductWorkspace({
   }
 
   async function exportProduct() {
+    const preview = window.open("", "_blank");
     setBusy("export");
     try {
       await call(`/api/products/${product.id}/export`, "POST");
-      window.open(`/products/${product.id}/export`, "_blank");
+      if (preview) { preview.opener = null; preview.location.href = `/products/${product.id}/export`; }
+      else throw new Error("Permita a janela de exportação ou use Pré-visualizar.");
       push("Exportação registrada. Use 'Salvar como PDF' na janela aberta.", "success");
     } catch (e) {
+      preview?.close();
       push((e as Error).message, "error");
     } finally {
       setBusy(null);
@@ -143,7 +161,7 @@ export function ProductWorkspace({
     }
     setBusy("publish");
     try {
-      await call(`/api/products/${product.id}/sales-page`, "PATCH", { published: next });
+      await call(`/api/products/${product.id}/sales-page`, "PATCH", { ...salesPatch(salesPage), published: next });
       setSalesPage({ ...salesPage, published: next });
       setProduct((p) => ({ ...p, status: next ? "PUBLISHED" : "READY" }));
       push(next ? "Produto publicado." : "Publicação revertida.", "success");
@@ -217,13 +235,15 @@ export function ProductWorkspace({
       ) : null}
 
       {tab === "editor" ? (
-        <EditorTab productId={product.id} chapters={chapters} setChapters={setChapters} push={push} />
+        <EditorTab productId={product.id} chapters={chapters} setChapters={setChapters} push={push} images={images} setImages={setImages} imageConfigured={imageConfigured} />
       ) : null}
 
       {tab === "design" ? (
         <DesignTab
           product={product}
           cover={cover}
+          onCover={setCover}
+          imageConfigured={imageConfigured}
           busy={busy === "cover"}
           onPatch={patchProduct}
           onGenerate={() => generate("cover")}
@@ -269,7 +289,7 @@ export function ProductWorkspace({
       ) : null}
 
       {tab === "marketing" ? (
-        <MarketingTab content={content} setContent={setContent} busy={busy === "marketing"} onGenerate={() => generate("marketing")} push={push} />
+        <MarketingEditor content={content} onChange={setContent} cover={cover} salesPath={salesPage?.published ? `/s/${product.slug}` : null} busy={busy === "marketing"} onGenerate={() => generate("marketing")} />
       ) : null}
 
       {tab === "analytics" ? (
@@ -319,7 +339,7 @@ function BlueprintTab({
   onDelete: () => void;
 }) {
   const [draft, setDraft] = useState(product);
-  useEffect(() => setDraft(product), [product]);
+
 
   return (
     <div className="space-y-5">
@@ -388,39 +408,62 @@ function EditorTab({
   chapters,
   setChapters,
   push,
+  images,
+  setImages,
+  imageConfigured,
 }: {
   productId: string;
   chapters: Chapter[];
   setChapters: (c: Chapter[]) => void;
+  images: ChapterImage[];
+  setImages: (images: ChapterImage[]) => void;
+  imageConfigured: boolean;
   push: (m: string, t?: "info" | "success" | "error") => void;
 }) {
   const [activeId, setActiveId] = useState(chapters[0]?.id ?? null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const pending = useRef(new Map<string, Partial<Chapter>>());
+  const queues = useRef(new Map<string, Promise<void>>());
   const active = useMemo(() => chapters.find((c) => c.id === activeId) ?? null, [chapters, activeId]);
 
-  const autosave = useCallback(
-    (id: string, patch: Partial<Chapter>) => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(async () => {
-        setSaving(true);
-        try {
-          await fetch(`/api/chapters/${id}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(patch),
-          });
-          setSavedAt(new Date().toLocaleTimeString("pt-BR"));
-        } catch {
-          push("Não conseguimos salvar agora. Sua edição continua na tela.", "error");
-        } finally {
-          setSaving(false);
+  const saveChapter = useCallback((id: string) => {
+    const queued = (queues.current.get(id) ?? Promise.resolve()).then(async () => {
+      const patch = pending.current.get(id);
+      if (!patch) return;
+      pending.current.delete(id);
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/chapters/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error ?? "Não conseguimos salvar agora.");
         }
-      }, 900);
-    },
-    [push],
-  );
+        setSavedAt(new Date().toLocaleTimeString("pt-BR"));
+      } catch (e) {
+        pending.current.set(id, { ...patch, ...pending.current.get(id) });
+        push((e as Error).message, "error");
+      } finally { setSaving(false); }
+    });
+    queues.current.set(id, queued);
+    return queued;
+  }, [push]);
+
+  useEffect(() => {
+    const scheduled = timers.current;
+    const changes = pending.current;
+    return () => {
+      scheduled.forEach(clearTimeout);
+      for (const id of changes.keys()) void saveChapter(id);
+    };
+  }, [saveChapter]);
+
+  function autosave(id: string, patch: Partial<Chapter>) {
+    clearTimeout(timers.current.get(id));
+    pending.current.set(id, { ...pending.current.get(id), ...patch });
+    timers.current.set(id, setTimeout(() => void saveChapter(id), 900));
+  }
 
   function update(id: string, patch: Partial<Chapter>) {
     setChapters(chapters.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -440,6 +483,8 @@ function EditorTab({
   }
 
   async function remove(id: string) {
+    clearTimeout(timers.current.get(id));
+    pending.current.delete(id);
     const res = await fetch(`/api/chapters/${id}`, { method: "DELETE" });
     if (!res.ok) return push("Não foi possível excluir o capítulo.", "error");
     const next = chapters.filter((c) => c.id !== id);
@@ -518,6 +563,22 @@ function EditorTab({
               <Textarea rows={18} value={active.content} onChange={(e) => update(active.id, { content: e.target.value })} />
             </Field>
             <p className="text-[11px] text-[#5c6577]">{active.content.split(/\s+/).filter(Boolean).length} palavras</p>
+            <Button size="sm" variant="secondary" loading={saving} onClick={() => void saveChapter(active.id)}>Salvar alterações</Button>
+            <div className="space-y-4 border-t border-[#232936] pt-5">
+              <h3 className="text-sm text-white">Imagens do capítulo</h3>
+              <ImageGenerate key={`ai-${active.id}`} productId={productId} chapterId={active.id} configured={imageConfigured} onGenerated={(image) => setImages([...images, image])} />
+              <ImageUpload key={active.id} productId={productId} chapterId={active.id} onUploaded={(image) => setImages([...images, image])} />
+              {images.filter((image) => image.chapterId === active.id).map((image) => <figure key={image.id} className="space-y-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={image.url} alt={image.caption || image.name} className="max-h-80 w-full rounded-lg object-contain" />
+                {image.caption ? <figcaption className="text-xs text-[#a5adbd]">{image.caption}</figcaption> : null}
+                <Button size="sm" variant="danger" onClick={async () => {
+                  const res = await fetch(`/api/chapter-blocks/${image.id}`, { method: "DELETE" });
+                  if (!res.ok) return push("Não foi possível remover a imagem.", "error");
+                  setImages(images.filter((item) => item.id !== image.id));
+                }}>Remover do capítulo</Button>
+              </figure>)}
+            </div>
           </div>
         )}
       </div>
@@ -530,12 +591,16 @@ function EditorTab({
 function DesignTab({
   product,
   cover,
+  onCover,
+  imageConfigured,
   busy,
   onPatch,
   onGenerate,
 }: {
   product: Product;
-  cover: string | null;
+  cover: ProductImage | null;
+  onCover: (image: ProductImage) => void;
+  imageConfigured: boolean;
   busy: boolean;
   onPatch: (p: Partial<Product>) => void;
   onGenerate: () => void;
@@ -578,19 +643,19 @@ function DesignTab({
             ))}
           </div>
         </div>
-        <Button variant="ai" loading={busy} onClick={onGenerate}>Gerar capa</Button>
+        <ImageGenerate productId={product.id} configured={imageConfigured} onGenerated={onCover} />
+        <ImageUpload productId={product.id} onUploaded={onCover} />
+        <Button variant="secondary" loading={busy} onClick={onGenerate}>Gerar capa tipográfica gratuita</Button>
         <p className="text-[11px] leading-relaxed text-[#5c6577]">
           A capa é gerada como vetor (SVG) pela própria plataforma — sem custo de crédito e sem dependência externa.
-          Geração de imagens por IA pode ser conectada futuramente pela mesma camada de assets.
+          Para uma capa ilustrada, use a geração por IA acima ou envie sua própria imagem.
         </p>
       </div>
 
             <div className="surface flex items-center justify-center p-5">
         {cover ? (
-          <div
-            className="w-full max-w-[280px] overflow-hidden"
-            dangerouslySetInnerHTML={{ __html: cover }}
-          />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cover.url} alt={`Capa de ${product.title}`} className="w-full max-w-[280px] rounded-lg" />
         ) : (
           <p className="text-xs text-[#6b7386]">Nenhuma capa gerada ainda.</p>
         )}
@@ -625,25 +690,13 @@ function SalesTab({
   async function save() {
     if (!salesPage) return;
     setSaving(true);
-    const res = await fetch(`/api/products/${product.id}/sales-page`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        headline: salesPage.headline,
-        subheadline: salesPage.subheadline,
-        problem: salesPage.problem,
-        solution: salesPage.solution,
-        benefits: salesPage.benefits,
-        bonuses: salesPage.bonuses,
-        differentials: salesPage.differentials,
-        contents: salesPage.contents,
-        faq: salesPage.faq,
-        guarantee: salesPage.guarantee,
-        ctaLabel: salesPage.ctaLabel,
-      }),
-    });
-    setSaving(false);
-    push(res.ok ? "Página de vendas salva." : "Não foi possível salvar agora.", res.ok ? "success" : "error");
+    try {
+      const res = await fetch(`/api/products/${product.id}/sales-page`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(salesPatch(salesPage)) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Não foi possível salvar agora.");
+      setSalesPage(json.data);
+      push("Página de vendas salva.", "success");
+    } catch (e) { push((e as Error).message, "error"); } finally { setSaving(false); }
   }
 
   if (!salesPage) {
@@ -720,6 +773,9 @@ function SalesTab({
             </Field>
           </div>
         </div>
+        <Field label="Link de checkout" hint="Cole o endereço HTTPS do pagamento (Hotmart, Kiwify, Stripe ou outro). Sem link, a compra fica desativada.">
+          <Input type="url" maxLength={2000} placeholder="https://..." value={salesPage.checkoutUrl ?? ""} onChange={(e) => setSalesPage({ ...salesPage, checkoutUrl: e.target.value })} />
+        </Field>
         <Field label="FAQ" hint="Formato: pergunta | resposta (um por linha).">
           <Textarea
             rows={5}
@@ -741,99 +797,9 @@ function SalesTab({
       </div>
 
       <div className="surface p-5 text-[11px] leading-relaxed text-[#5c6577]">
-        Checkout: gateway de pagamento não configurado nesta instalação. O botão da página pública registra o evento
-        <span className="text-[#a5adbd]"> checkout_started </span> e cria um pedido PENDING — nenhuma venda é simulada.
+        Revise o texto, salve e use Publicar para disponibilizar sua página. O checkout externo é responsável pelo pagamento e pela entrega; a INFORA registra os acessos e cliques, sem confirmar vendas automaticamente.
+        {salesPage.published ? <a href={`/s/${product.slug}`} target="_blank" rel="noreferrer" className="mt-3 block text-[#7396ff]">Abrir página de vendas ↗</a> : null}
       </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------- MARKETING */
-
-const CHANNEL_TONE: Record<string, "brand" | "ai" | "neutral"> = {
-  INSTAGRAM: "ai",
-  FACEBOOK: "brand",
-  EMAIL: "neutral",
-  ADS: "brand",
-};
-
-function MarketingTab({
-  content,
-  setContent,
-  busy,
-  onGenerate,
-  push,
-}: {
-  content: ContentItem[];
-  setContent: (c: ContentItem[]) => void;
-  busy: boolean;
-  onGenerate: () => void;
-  push: (m: string, t?: "info" | "success" | "error") => void;
-}) {
-  async function setStatus(id: string, status: string) {
-    const res = await fetch(`/api/content/${id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      push(json.error ?? "Não foi possível atualizar.", "error");
-      return;
-    }
-    setContent(content.map((c) => (c.id === id ? { ...c, status } : c)));
-    push("Status atualizado.", "success");
-  }
-
-  if (content.length === 0) {
-    return (
-      <div className="surface space-y-4 p-6 text-center">
-        <p className="text-sm text-white">Nenhum conteúdo promocional ainda.</p>
-        <p className="mx-auto max-w-md text-xs leading-relaxed text-[#a5adbd]">
-          Gere posts, Stories, roteiros de Reels, e-mails de lançamento e variações de anúncio conectados a este produto.
-        </p>
-        <Button variant="ai" loading={busy} onClick={onGenerate}>Gerar conteúdo (350 créditos)</Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <SectionTitle
-        title="Conteúdo promocional"
-        subtitle={`${content.length} itens no calendário`}
-        action={<Button size="sm" variant="ai" loading={busy} onClick={onGenerate}>Gerar mais</Button>}
-      />
-      <div className="grid gap-3 md:grid-cols-2">
-        {content.map((c) => (
-          <div key={c.id} className="surface p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Badge tone={CHANNEL_TONE[c.channel] ?? "neutral"}>{c.channel}</Badge>
-                <span className="text-[10px] uppercase tracking-wider text-[#6b7386]">{c.format}</span>
-              </div>
-              <span className="text-[10px] text-[#5c6577]">
-                {c.scheduledFor ? new Date(c.scheduledFor).toLocaleDateString("pt-BR") : "sem data"}
-              </span>
-            </div>
-            <p className="mt-2.5 text-xs font-medium text-white">{c.title}</p>
-            <p className="mt-1.5 whitespace-pre-wrap text-[11px] leading-relaxed text-[#a5adbd]">{c.body}</p>
-            {c.cta ? <p className="mt-2 text-[11px] text-[#7396ff]">CTA: {c.cta}</p> : null}
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#171b24] pt-3">
-              <Badge tone={c.status === "PUBLISHED" ? "success" : c.status === "SCHEDULED" ? "brand" : c.status === "FAILED" ? "danger" : "neutral"}>
-                {c.status}
-              </Badge>
-              <Button size="sm" variant="ghost" onClick={() => setStatus(c.id, "AWAITING_APPROVAL")}>Aprovar depois</Button>
-              <Button size="sm" variant="ghost" onClick={() => setStatus(c.id, "SCHEDULED")}>Agendar</Button>
-              <Button size="sm" variant="ghost" onClick={() => setStatus(c.id, "PUBLISHED")}>Publicar</Button>
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="text-[11px] leading-relaxed text-[#5c6577]">
-        Publicação direta em redes sociais exige integração oficial conectada e aprovação explícita. Enquanto não houver
-        conta conectada, a ação de publicar retorna <span className="text-[#a5adbd]">Integration not configured</span>.
-      </p>
     </div>
   );
 }

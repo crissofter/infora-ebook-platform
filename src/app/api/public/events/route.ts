@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { customers, orderItems, orders, payments, products } from "@/db/schema";
+import { customers, orderItems, orders, payments, products, salesPages } from "@/db/schema";
 import { apiError, apiOk, clientIp, handler, parseBody, rateLimit } from "@/lib/api";
 import { notify, recordEvent } from "@/lib/analytics";
 
@@ -42,6 +42,8 @@ export const POST = handler(async (request) => {
   }
 
   if (body.type === "checkout_started") {
+    const [page] = await db.select({ checkoutUrl: salesPages.checkoutUrl }).from(salesPages).where(eq(salesPages.productId, product.id)).limit(1);
+    if (page?.checkoutUrl) return apiOk({ recorded: true, checkout: "external", url: page.checkoutUrl });
     // Gateway de pagamento não configurado: o pedido fica PENDING e nenhuma
     // venda é simulada. O registro permite conectar o gateway depois.
     const order = (

@@ -2,14 +2,14 @@ import { randomBytes } from "node:crypto";
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { chapters, productVersions, products, projects } from "@/db/schema";
+import { assets, chapters, productVersions, products, projects } from "@/db/schema";
 import { apiError, apiOk, handler, parseBody, rateLimit } from "@/lib/api";
 import { requireSession } from "@/lib/auth";
 import { getPlan } from "@/lib/billing";
 import { CreditError, generateBlueprint } from "@/lib/ai/engine";
 import { notify, recordEvent } from "@/lib/analytics";
 import { audit } from "@/lib/logger";
-import { ensureDefaultProject, PRODUCT_TYPES } from "@/lib/products";
+import { buildCoverSvg, ensureDefaultProject, PRODUCT_TYPES } from "@/lib/products";
 import { uniqueSlug } from "@/lib/slug";
 
 const schema = z.object({
@@ -77,6 +77,8 @@ export const POST = handler(async (request) => {
     })
     .returning();
   const product = created[0];
+  const cover = buildCoverSvg({ title: product.title, subtitle: product.subtitle, author: user.name, style: product.designStyle, palette: product.coverPalette });
+  await db.insert(assets).values({ organizationId: organization.id, productId: product.id, kind: "COVER", format: "svg", name: `${product.slug}-cover.svg`, payload: cover, sizeBytes: Buffer.byteLength(cover) });
 
   await recordEvent({ organizationId: organization.id, userId: user.id, productId: product.id, type: "product_created" });
   await audit({ organizationId: organization.id, actorId: user.id, action: "product.create", entity: "product", entityId: product.id });
@@ -122,6 +124,8 @@ export const POST = handler(async (request) => {
       snapshot: result,
       createdBy: user.id,
     });
+    const generatedCover = buildCoverSvg({ title: result.title, subtitle: result.subtitle, author: user.name, style: product.designStyle, palette: product.coverPalette });
+    await db.insert(assets).values({ organizationId: organization.id, productId: product.id, kind: "COVER", format: "svg", name: `${product.slug}-cover.svg`, payload: generatedCover, sizeBytes: Buffer.byteLength(generatedCover) });
 
     await notify({
       organizationId: organization.id,
